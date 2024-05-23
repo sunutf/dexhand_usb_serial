@@ -12,15 +12,27 @@ class USBSerialNode(Node):
         serial_port = self.get_parameter("serial_port").get_parameter_value().string_value
         
         self.publisher_ = self.create_publisher(String, 'dexhand_hw_response', 10)
-        self.subscription = self.create_subscription(String, 'dexhand_hw_command', self.listener_callback, 10)
-        
+        self.subscription = self.create_subscription(String, 'dexhand_hw_command', self.cmd_listener_callback, 10)
+        self.subscription_dof = self.create_subscription(String, 'dexhand_dof_stream', self.joint_listener_callback, 10)
+
         self.serial_conn = serial.Serial(serial_port, 9600)
         self.timer = self.create_timer(0.1, self.read_from_serial)
 
-    def listener_callback(self, msg):
-        message = msg.data+'\n'
-        self.get_logger().info('Sending to Arduino: "%s"' % message)
-        self.serial_conn.write(message.encode('utf-8'))
+    def cmd_listener_callback(self, msg):
+        try:
+            message = msg.data+'\n'
+            self.get_logger().info('Sending to Arduino: CMD | "%s"' % message)
+            self.serial_conn.write(message.encode('utf-8'))
+        except Exception as e:
+            self.get_logger().error('Failed to send command: %s' % str(e))
+        
+    def joint_listener_callback(self, msg):
+        try:
+            message = bytearray.fromhex(msg.data)
+            self.get_logger().info('Sending to Arduino: DOF | "%s"' % message)
+            self.serial_conn.write(message)
+        except Exception as e:
+            self.get_logger().error('Failed to send joint values: %s' % str(e))
 
     def read_from_serial(self):
         if self.serial_conn.in_waiting:
